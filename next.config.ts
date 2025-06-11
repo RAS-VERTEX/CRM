@@ -1,15 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["html2pdf.js"],
-  },
+  // Updated: moved from experimental.serverComponentsExternalPackages to serverExternalPackages
+  serverExternalPackages: ["html2pdf.js"],
+
   images: {
     domains: ["your-simpro-instance.simprocloud.com"],
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+
   async headers() {
     return [
       {
@@ -28,6 +29,7 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
   async redirects() {
     return [
       {

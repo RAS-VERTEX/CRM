@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "SimPRO Photo Grid CRM",
   description: "Enterprise photo grid report builder with SimPRO integration",
   keywords: ["SimPRO", "CRM", "Photo Grid", "Report Builder", "Enterprise"],
-  authors: [{ name: "Your Company" }],
+  authors: [{ name: "RAS-VERTEX" }],
 };
 
 export default function RootLayout({

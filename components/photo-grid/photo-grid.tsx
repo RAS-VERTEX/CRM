@@ -177,6 +177,8 @@ const PhotoGridApp = () => {
     return Math.ceil(photos.length / pdfOptions.photosPerPage);
   };
 
+  // Replace your existing downloadPDF function with this improved version
+
   const downloadPDF = async () => {
     if (photos.length === 0) return;
 
@@ -222,7 +224,7 @@ const PhotoGridApp = () => {
                   <div style="flex: 1; padding: 8px; background: white; display: flex; align-items: center; justify-content: center;">
                     <img src="${
                       photo.url
-                    }" style="max-width: 100%; max-height: 100%; object-fit: cover; border-radius: 4px;" />
+                    }" style="max-width: 100%; max-height: 100%; object-fit: cover; border-radius: 4px;" class="pdf-image" />
                   </div>
                   ${
                     pdfOptions.includeFilenames
@@ -258,28 +260,80 @@ const PhotoGridApp = () => {
         ? `job-${jobNumber}-photos-${photos.length}items-${totalPages}pages.pdf`
         : `photo-grid-${photos.length}items-${totalPages}pages.pdf`;
 
-      const opt = {
-        margin: 0.5,
-        filename,
-        image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: {
-          unit: "in",
-          format: pdfOptions.paperSize.toLowerCase(),
-          orientation: pdfOptions.orientation,
-        },
-      };
-
+      // Create temporary container
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = content;
       tempDiv.style.position = "absolute";
       tempDiv.style.left = "-9999px";
+      tempDiv.style.width = "210mm"; // A4 width
+      tempDiv.style.backgroundColor = "white";
       document.body.appendChild(tempDiv);
 
+      // 🔥 KEY FIX: Wait for all images to load before generating PDF
+      console.log("Waiting for images to load...");
+      const images = tempDiv.querySelectorAll("img.pdf-image");
+      const imagePromises = Array.from(images).map((img: HTMLImageElement) => {
+        return new Promise((resolve) => {
+          if (img.complete && img.naturalHeight !== 0) {
+            resolve(img);
+          } else {
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+              console.warn("Failed to load image:", img.src);
+              resolve(img); // Continue even if image fails
+            };
+
+            // Timeout after 10 seconds
+            setTimeout(() => {
+              console.warn("Image load timeout:", img.src);
+              resolve(img);
+            }, 10000);
+          }
+        });
+      });
+
+      // Wait for all images to finish loading
+      await Promise.all(imagePromises);
+      console.log("All images loaded, generating PDF...");
+
+      // Add a small delay to ensure DOM is stable
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const opt = {
+        margin: 0.5,
+        filename,
+        image: {
+          type: "jpeg",
+          quality: 0.95,
+        },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+          width: tempDiv.scrollWidth,
+          height: tempDiv.scrollHeight,
+        },
+        jsPDF: {
+          unit: "in",
+          format: pdfOptions.paperSize.toLowerCase(),
+          orientation: pdfOptions.orientation,
+          compress: true,
+        },
+      };
+
+      // Generate PDF
       await html2pdf.default().set(opt).from(tempDiv).save();
+      console.log("PDF generated successfully!");
+
+      // Clean up
       document.body.removeChild(tempDiv);
     } catch (err) {
-      handleError("Failed to generate PDF");
+      console.error("PDF generation error:", err);
+      handleError(
+        "Failed to generate PDF. Please try again with fewer photos or check the console for details."
+      );
     } finally {
       setLoading(false);
     }
