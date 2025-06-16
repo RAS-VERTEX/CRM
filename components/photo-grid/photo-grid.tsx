@@ -12,7 +12,9 @@ import {
   Search,
   AlertCircle,
   CheckCircle,
+  Edit3,
 } from "lucide-react";
+import { usePDFGenerator } from "@/lib/hooks/usePDFGernerator";
 
 interface PhotoGridItem {
   id: string;
@@ -32,6 +34,11 @@ interface PhotoGridOptions {
   orientation: "portrait" | "landscape";
 }
 
+interface JobInfo {
+  name?: string;
+  number?: string;
+}
+
 const PhotoGridApp = () => {
   const [photos, setPhotos] = useState<PhotoGridItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,6 +47,10 @@ const PhotoGridApp = () => {
   const [companyId, setCompanyId] = useState("0");
   const [currentJob, setCurrentJob] = useState<any>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  // Photo name editing state
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const [pdfOptions, setPdfOptions] = useState<PhotoGridOptions>({
     photosPerPage: 6,
@@ -52,6 +63,7 @@ const PhotoGridApp = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const { generatePDF } = usePDFGenerator();
 
   const handleError = useCallback((message: string, details?: any) => {
     console.error(message, details);
@@ -161,6 +173,38 @@ const PhotoGridApp = () => {
     }
   };
 
+  // Photo name editing functions
+  const startEditingName = (photoId: string, currentName: string) => {
+    setEditingPhotoId(photoId);
+    setEditingName(removeExtension(currentName));
+  };
+
+  const savePhotoName = (photoId: string) => {
+    if (editingName.trim()) {
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId
+            ? {
+                ...photo,
+                name:
+                  editingName.trim() +
+                  (photo.name.includes(".")
+                    ? "." + photo.name.split(".").pop()
+                    : ""),
+              }
+            : photo
+        )
+      );
+    }
+    setEditingPhotoId(null);
+    setEditingName("");
+  };
+
+  const cancelEditingName = () => {
+    setEditingPhotoId(null);
+    setEditingName("");
+  };
+
   const removeExtension = (filename: string) => {
     return filename.replace(/\.[^/.]+$/, "");
   };
@@ -177,162 +221,32 @@ const PhotoGridApp = () => {
     return Math.ceil(photos.length / pdfOptions.photosPerPage);
   };
 
-  // Replace your existing downloadPDF function with this improved version
-
   const downloadPDF = async () => {
     if (photos.length === 0) return;
 
     setLoading(true);
+    console.log("=== STARTING PDF GENERATION ===");
+    console.log("Photos to export:", photos.length);
+    console.log("PDF Options:", pdfOptions);
+
     try {
-      const html2pdf = await import("html2pdf.js");
-
-      const photosPerPage = pdfOptions.photosPerPage;
-      const totalPages = Math.ceil(photos.length / photosPerPage);
-
-      let allPagesContent = "";
-
-      for (let page = 0; page < totalPages; page++) {
-        const startIndex = page * photosPerPage;
-        const endIndex = Math.min(startIndex + photosPerPage, photos.length);
-        const pagePhotos = photos.slice(startIndex, endIndex);
-
-        allPagesContent += `
-          <div style="page-break-after: ${
-            page < totalPages - 1 ? "always" : "auto"
-          }; padding: 20px; min-height: 100vh; font-family: 'Poppins', sans-serif;">
-            <div style="text-align: center; margin-bottom: 20px; font-size: 12px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-              <div style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 4px;">
-                ${
-                  currentJob
-                    ? `Job ${currentJob.Name || jobNumber}`
-                    : "Photo Grid Report"
-                }
-              </div>
-              <div>Page ${page + 1} of ${totalPages} | Photos ${
-          startIndex + 1
-        }-${endIndex} of ${
-          photos.length
-        } | Generated: ${new Date().toLocaleDateString()}</div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(${
-              pdfOptions.gridCols
-            }, 1fr); gap: 12px; height: calc(100vh - 100px);">
-              ${pagePhotos
-                .map(
-                  (photo) => `
-                <div style="border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; background: white; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                  <div style="flex: 1; padding: 8px; background: white; display: flex; align-items: center; justify-content: center;">
-                    <img src="${
-                      photo.url
-                    }" style="max-width: 100%; max-height: 100%; object-fit: cover; border-radius: 4px;" class="pdf-image" />
-                  </div>
-                  ${
-                    pdfOptions.includeFilenames
-                      ? `
-                    <div style="padding: 8px; font-size: ${
-                      pdfOptions.fontSize === "small"
-                        ? "8px"
-                        : pdfOptions.fontSize === "large"
-                        ? "11px"
-                        : "9px"
-                    }; font-weight: 500; color: #333; word-break: break-word; line-height: 1.2; border-top: 1px solid #f0f0f0; background: #fafafa;">
-                      ${removeExtension(photo.name)}
-                    </div>
-                  `
-                      : ""
-                  }
-                </div>
-              `
-                )
-                .join("")}
-            </div>
-          </div>
-        `;
-      }
-
-      const content = `
-        <div style="font-family: 'Poppins', sans-serif;">
-          ${allPagesContent}
-        </div>
-      `;
-
-      const filename = currentJob
-        ? `job-${jobNumber}-photos-${photos.length}items-${totalPages}pages.pdf`
-        : `photo-grid-${photos.length}items-${totalPages}pages.pdf`;
-
-      // Create temporary container
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = content;
-      tempDiv.style.position = "absolute";
-      tempDiv.style.left = "-9999px";
-      tempDiv.style.width = "210mm"; // A4 width
-      tempDiv.style.backgroundColor = "white";
-      document.body.appendChild(tempDiv);
-
-      // 🔥 KEY FIX: Wait for all images to load before generating PDF
-      console.log("Waiting for images to load...");
-      const images = tempDiv.querySelectorAll("img.pdf-image");
-      const imagePromises = Array.from(images).map((img: HTMLImageElement) => {
-        return new Promise((resolve) => {
-          if (img.complete && img.naturalHeight !== 0) {
-            resolve(img);
-          } else {
-            img.onload = () => resolve(img);
-            img.onerror = () => {
-              console.warn("Failed to load image:", img.src);
-              resolve(img); // Continue even if image fails
-            };
-
-            // Timeout after 10 seconds
-            setTimeout(() => {
-              console.warn("Image load timeout:", img.src);
-              resolve(img);
-            }, 10000);
-          }
-        });
-      });
-
-      // Wait for all images to finish loading
-      await Promise.all(imagePromises);
-      console.log("All images loaded, generating PDF...");
-
-      // Add a small delay to ensure DOM is stable
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const opt = {
-        margin: 0.5,
-        filename,
-        image: {
-          type: "jpeg",
-          quality: 0.95,
-        },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          width: tempDiv.scrollWidth,
-          height: tempDiv.scrollHeight,
-        },
-        jsPDF: {
-          unit: "in",
-          format: pdfOptions.paperSize.toLowerCase(),
-          orientation: pdfOptions.orientation,
-          compress: true,
-        },
+      const jobInfo: JobInfo = {
+        name: currentJob?.Name || jobNumber || undefined,
+        number: jobNumber || undefined,
       };
 
-      // Generate PDF
-      await html2pdf.default().set(opt).from(tempDiv).save();
-      console.log("PDF generated successfully!");
+      console.log("Job Info:", jobInfo);
 
-      // Clean up
-      document.body.removeChild(tempDiv);
+      await generatePDF(photos, pdfOptions, jobInfo);
+
+      console.log("=== PDF GENERATION COMPLETED ===");
+
+      setError("PDF generated successfully!");
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
-      console.error("PDF generation error:", err);
+      console.error("=== PDF GENERATION FAILED ===", err);
       handleError(
-        "Failed to generate PDF. Please try again with fewer photos or check the console for details."
+        "Failed to generate PDF. Please check the console for details."
       );
     } finally {
       setLoading(false);
@@ -343,6 +257,8 @@ const PhotoGridApp = () => {
     setPhotos([]);
     setCurrentJob(null);
     setJobNumber("");
+    setEditingPhotoId(null);
+    setEditingName("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -350,6 +266,10 @@ const PhotoGridApp = () => {
 
   const removePhoto = (photoId: string) => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
+    if (editingPhotoId === photoId) {
+      setEditingPhotoId(null);
+      setEditingName("");
+    }
   };
 
   return (
@@ -409,9 +329,27 @@ const PhotoGridApp = () => {
 
       {error && (
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-            <span className="text-red-800">{error}</span>
+          <div
+            className={`border rounded-lg p-4 flex items-center gap-3 ${
+              error.includes("successfully")
+                ? "bg-green-50 border-green-200"
+                : "bg-red-50 border-red-200"
+            }`}
+          >
+            {error.includes("successfully") ? (
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-600" />
+            )}
+            <span
+              className={
+                error.includes("successfully")
+                  ? "text-green-800"
+                  : "text-red-800"
+              }
+            >
+              {error}
+            </span>
           </div>
         </div>
       )}
@@ -636,9 +574,49 @@ const PhotoGridApp = () => {
                     />
                   </div>
                   <div className="p-3">
-                    <p className="text-sm font-medium text-gray-900 break-words leading-tight">
-                      {removeExtension(photo.name)}
-                    </p>
+                    {editingPhotoId === photo.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") savePhotoName(photo.id);
+                            if (e.key === "Escape") cancelEditingName();
+                          }}
+                        />
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => savePhotoName(photo.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditingName}
+                            className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p
+                          className="text-sm font-medium text-gray-900 break-words leading-tight flex-1 cursor-pointer hover:text-blue-600 transition-colors"
+                          onClick={() => startEditingName(photo.id, photo.name)}
+                          title="Click to edit filename"
+                        >
+                          {removeExtension(photo.name)}
+                        </p>
+                        <Edit3
+                          className="w-3 h-3 text-gray-400 cursor-pointer hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100"
+                          onClick={() => startEditingName(photo.id, photo.name)}
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-2">
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${

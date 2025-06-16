@@ -1,11 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Updated: moved from experimental.serverComponentsExternalPackages to serverExternalPackages
-  serverExternalPackages: ["html2pdf.js"],
+  // Remove this line: serverExternalPackages: ["html2pdf.js"],
 
   images: {
-    domains: ["your-simpro-instance.simprocloud.com"],
+    domains: ["ropeaccessservices.simprocloud.com"],
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
