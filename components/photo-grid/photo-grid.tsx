@@ -1,128 +1,59 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import {
   Upload,
   Download,
-  Grid,
-  FileText,
-  X,
-  Settings,
   Building2,
   Search,
+  X,
   AlertCircle,
-  CheckCircle,
-  Edit3,
+  FileText,
 } from "lucide-react";
-import { usePDFGenerator } from "@/lib/hooks/usePDFGernerator";
+import { usePDFEditor } from "@/lib/hooks/usePDFEditor";
+import PDFEditor from "@/components/PDFEditor";
 
-interface PhotoGridItem {
+interface Photo {
   id: string;
   name: string;
   url: string;
   size: number;
-  source: "upload" | "simpro";
-  simproData?: any;
-}
-
-interface PhotoGridOptions {
-  photosPerPage: number;
-  includeFilenames: boolean;
-  fontSize: "small" | "medium" | "large";
-  gridCols: 2 | 3 | 4 | 6;
-  paperSize: "A4" | "Letter";
-  orientation: "portrait" | "landscape";
-}
-
-interface JobInfo {
-  name?: string;
-  number?: string;
 }
 
 const PhotoGridApp = () => {
-  const [photos, setPhotos] = useState<PhotoGridItem[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobNumber, setJobNumber] = useState("");
-  const [companyId, setCompanyId] = useState("0");
-  const [currentJob, setCurrentJob] = useState<any>(null);
-  const [showSettings, setShowSettings] = useState(false);
-
-  // Photo name editing state
-  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-
-  const [pdfOptions, setPdfOptions] = useState<PhotoGridOptions>({
-    photosPerPage: 6,
-    includeFilenames: true,
-    fontSize: "medium",
-    gridCols: 3,
-    paperSize: "A4",
-    orientation: "portrait",
-  });
+  const [showPDFEditor, setShowPDFEditor] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const printRef = useRef<HTMLDivElement>(null);
-  const { generatePDF } = usePDFGenerator();
+  const pdfEditor = usePDFEditor();
 
-  const handleError = useCallback((message: string, details?: any) => {
-    console.error(message, details);
-    setError(message);
-    setTimeout(() => setError(null), 5000);
-  }, []);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const photoPromises = files.map((file) => {
-        return new Promise<PhotoGridItem>((resolve, reject) => {
-          if (!file.type.startsWith("image/")) {
-            reject(new Error(`${file.name} is not a valid image file`));
-            return;
-          }
-
-          if (file.size > 10 * 1024 * 1024) {
-            reject(
-              new Error(`${file.name} is too large. Maximum size is 10MB`)
-            );
-            return;
-          }
-
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            resolve({
-              id: `upload_${Date.now()}_${Math.random()}`,
-              name: file.name,
-              url: e.target?.result as string,
-              size: file.size,
-              source: "upload",
-            });
+    files.forEach((file) => {
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const newPhoto: Photo = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            url: e.target?.result as string,
+            size: file.size,
           };
-          reader.onerror = () =>
-            reject(new Error(`Failed to read ${file.name}`));
-          reader.readAsDataURL(file);
-        });
-      });
-
-      const loadedPhotos = await Promise.all(photoPromises);
-      setPhotos((prev) => [...prev, ...loadedPhotos]);
-    } catch (err) {
-      handleError(
-        err instanceof Error ? err.message : "Failed to upload files"
-      );
-    } finally {
-      setLoading(false);
-    }
+          setPhotos((prev) => [...prev, newPhoto]);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
   };
 
-  const fetchSimproAttachments = async () => {
+  const fetchSimproPhotos = async () => {
     if (!jobNumber.trim()) {
-      handleError("Please enter a job number");
+      setError("Please enter a job number");
       return;
     }
 
@@ -131,59 +62,51 @@ const PhotoGridApp = () => {
 
     try {
       const response = await fetch(
-        `/api/simpro/jobs/${jobNumber}/attachments?companyId=${companyId}`
+        `/api/simpro/jobs/${jobNumber}/attachments?companyId=0`
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch attachments: ${response.statusText}`);
+        throw new Error("Failed to fetch photos from SimPRO");
       }
 
-      const { attachments, job } = await response.json();
-      setCurrentJob(job);
+      const { attachments } = await response.json();
 
-      const imageAttachments = attachments.filter((att: any) =>
-        att.MimeType?.startsWith("image/")
-      );
-
-      if (imageAttachments.length === 0) {
-        handleError("No image attachments found for this job");
+      if (!attachments || attachments.length === 0) {
+        setError(`No photos found for job ${jobNumber}`);
         return;
       }
 
-      const simproPhotos: PhotoGridItem[] = imageAttachments.map(
-        (att: any) => ({
-          id: `simpro_${att.ID}`,
-          name: att.Filename,
-          url: `data:${att.MimeType};base64,${att.Base64Data}`,
-          size: att.FileSizeBytes,
-          source: "simpro" as const,
-          simproData: att,
-        })
-      );
+      const simproPhotos: Photo[] = attachments.map((att: any) => ({
+        id: `simpro_${att.ID}`,
+        name: att.Filename,
+        url: `data:${att.MimeType};base64,${att.Base64Data}`,
+        size: att.FileSizeBytes || 0,
+      }));
 
       setPhotos((prev) => [...prev, ...simproPhotos]);
+      setError(`Loaded ${simproPhotos.length} photos from SimPRO`);
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
-      handleError(
-        err instanceof Error
-          ? err.message
-          : "Failed to fetch SimPRO attachments"
-      );
+      setError(err instanceof Error ? err.message : "Failed to fetch photos");
     } finally {
       setLoading(false);
     }
   };
 
-  // Photo name editing functions
-  const startEditingName = (photoId: string, currentName: string) => {
-    setEditingPhotoId(photoId);
-    setEditingName(removeExtension(currentName));
+  const removePhoto = (id: string) => {
+    setPhotos((prev) => prev.filter((photo) => photo.id !== id));
   };
 
-  const savePhotoName = (photoId: string) => {
+  const startEditing = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditingName(currentName.replace(/\.[^/.]+$/, ""));
+  };
+
+  const saveEdit = (id: string) => {
     if (editingName.trim()) {
       setPhotos((prev) =>
         prev.map((photo) =>
-          photo.id === photoId
+          photo.id === id
             ? {
                 ...photo,
                 name:
@@ -196,79 +119,149 @@ const PhotoGridApp = () => {
         )
       );
     }
-    setEditingPhotoId(null);
+    setEditingId(null);
     setEditingName("");
   };
 
-  const cancelEditingName = () => {
-    setEditingPhotoId(null);
+  const cancelEdit = () => {
+    setEditingId(null);
     setEditingName("");
   };
 
-  const removeExtension = (filename: string) => {
-    return filename.replace(/\.[^/.]+$/, "");
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getPageCount = () => {
-    return Math.ceil(photos.length / pdfOptions.photosPerPage);
-  };
-
-  const downloadPDF = async () => {
-    if (photos.length === 0) return;
-
-    setLoading(true);
-    console.log("=== STARTING PDF GENERATION ===");
-    console.log("Photos to export:", photos.length);
-    console.log("PDF Options:", pdfOptions);
-
-    try {
-      const jobInfo: JobInfo = {
-        name: currentJob?.Name || jobNumber || undefined,
-        number: jobNumber || undefined,
-      };
-
-      console.log("Job Info:", jobInfo);
-
-      await generatePDF(photos, pdfOptions, jobInfo);
-
-      console.log("=== PDF GENERATION COMPLETED ===");
-
-      setError("PDF generated successfully!");
-      setTimeout(() => setError(null), 3000);
-    } catch (err) {
-      console.error("=== PDF GENERATION FAILED ===", err);
-      handleError(
-        "Failed to generate PDF. Please check the console for details."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearPhotos = () => {
+  const clearAll = () => {
     setPhotos([]);
-    setCurrentJob(null);
     setJobNumber("");
-    setEditingPhotoId(null);
+    setEditingId(null);
     setEditingName("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const removePhoto = (photoId: string) => {
-    setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
-    if (editingPhotoId === photoId) {
-      setEditingPhotoId(null);
-      setEditingName("");
+  const generatePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Photo Report</title>
+          <style>
+            @page { 
+              margin: 15mm; 
+              size: A4;
+              margin-top: 0;
+              margin-bottom: 0;
+              @top-left { content: none; }
+              @top-center { content: none; }
+              @top-right { content: none; }
+              @bottom-left { content: none; }
+              @bottom-center { content: none; }
+              @bottom-right { content: none; }
+            }
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700&display=swap');
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Poppins', Arial, sans-serif;
+              font-weight: 200;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            .grid { 
+              display: grid; 
+              grid-template-columns: repeat(4, 1fr); 
+              gap: 1rem; 
+              padding: 1rem;
+            }
+            .photo-item { 
+              position: relative;
+            }
+            .photo-container { 
+              aspect-ratio: 1;
+              background: #f3f4f6 !important;
+              border-radius: 0.5rem;
+              overflow: hidden;
+            }
+            .photo-container img { 
+              width: 100%; 
+              height: 100%; 
+              object-fit: cover; 
+            }
+            .caption { 
+              background: #f3f4f6 !important;
+              border-radius: 0.5rem;
+              padding: 0.5rem 0.75rem;
+              margin-top: 0.5rem;
+              text-align: center;
+              font-size: 0.75rem;
+              font-weight: 200;
+              color: #374151 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            @media print {
+              .grid { 
+                grid-template-columns: repeat(3, 1fr); 
+                gap: 0.75rem; 
+              }
+              .caption {
+                font-size: 0.7rem;
+                padding: 0.4rem 0.6rem;
+                background: #f3f4f6 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .photo-container {
+                background: #f3f4f6 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="grid">
+            ${photos
+              .map(
+                (photo) => `
+              <div class="photo-item">
+                <div class="photo-container">
+                  <img src="${photo.url}" alt="${photo.name}" />
+                </div>
+                <div class="caption">${photo.name.replace(
+                  /\.[^/.]+$/,
+                  ""
+                )}</div>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const generateReport = async (
+    mode: "print-only" | "pdf-editor" = "print-only"
+  ) => {
+    if (mode === "print-only") {
+      generatePrint();
+    } else {
+      // Convert photos to the format expected by generatePhotoPDF
+      const photoData = photos.map((photo) => ({
+        url: photo.url,
+        name: photo.name,
+      }));
+
+      await pdfEditor.generatePhotoPDF(photoData);
+      setShowPDFEditor(true);
     }
   };
 
@@ -277,376 +270,212 @@ const PhotoGridApp = () => {
       className="min-h-screen bg-gray-50"
       style={{ fontFamily: "Poppins, sans-serif" }}
     >
+      {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="max-w-6xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <Building2 className="w-8 h-8 text-blue-600" />
-                Photo Grid Report Builder
+                Photo Report Builder
               </h1>
               <p className="text-gray-600 mt-2">
-                Generate professional photo reports from SimPRO jobs or uploaded
-                images
+                Import photos from SimPRO or upload manually
               </p>
             </div>
 
-            <div className="flex gap-3">
-              {photos.length > 0 && (
-                <>
-                  <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Settings
-                  </button>
-                  <button
-                    onClick={downloadPDF}
-                    disabled={loading}
-                    className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    {loading
-                      ? "Generating..."
-                      : `Download PDF (${getPageCount()} page${
-                          getPageCount() > 1 ? "s" : ""
-                        })`}
-                  </button>
-                  <button
-                    onClick={clearPhotos}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                    Clear All
-                  </button>
-                </>
-              )}
-            </div>
+            {photos.length > 0 && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => generateReport("print-only")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Quick Print
+                </button>
+
+                <button
+                  onClick={() => generateReport("pdf-editor")}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  PDF Editor
+                </button>
+
+                <button
+                  onClick={clearAll}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Clear All
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {error && (
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="max-w-6xl mx-auto px-6 py-6">
+        {/* Error Message */}
+        {error && (
           <div
-            className={`border rounded-lg p-4 flex items-center gap-3 ${
-              error.includes("successfully")
-                ? "bg-green-50 border-green-200"
-                : "bg-red-50 border-red-200"
+            className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
+              error.includes("Loaded")
+                ? "bg-green-50 text-green-800 border border-green-200"
+                : "bg-red-50 text-red-800 border border-red-200"
             }`}
           >
-            {error.includes("successfully") ? (
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-red-600" />
-            )}
-            <span
-              className={
-                error.includes("successfully")
-                  ? "text-green-800"
-                  : "text-red-800"
-              }
+            <AlertCircle className="w-5 h-5" />
+            {error}
+          </div>
+        )}
+
+        {/* SimPRO Import */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Import from SimPRO</h3>
+          <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Enter job number..."
+              value={jobNumber}
+              onChange={(e) => setJobNumber(e.target.value)}
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2"
+              onKeyPress={(e) => e.key === "Enter" && fetchSimproPhotos()}
+            />
+            <button
+              onClick={fetchSimproPhotos}
+              disabled={loading || !jobNumber.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg flex items-center gap-2"
             >
-              {error}
-            </span>
+              <Search className="w-4 h-4" />
+              {loading ? "Loading..." : "Fetch Photos"}
+            </button>
           </div>
         </div>
-      )}
 
-      {showSettings && (
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="bg-white rounded-lg shadow-sm p-6 border">
-            <h3 className="text-lg font-semibold mb-4">
-              PDF Generation Settings
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Photos per Page
-                </label>
-                <select
-                  value={pdfOptions.photosPerPage}
-                  onChange={(e) =>
-                    setPdfOptions((prev) => ({
-                      ...prev,
-                      photosPerPage: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  <option value={4}>4 Photos</option>
-                  <option value={6}>6 Photos</option>
-                  <option value={8}>8 Photos</option>
-                  <option value={12}>12 Photos</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Grid Columns
-                </label>
-                <select
-                  value={pdfOptions.gridCols}
-                  onChange={(e) =>
-                    setPdfOptions((prev) => ({
-                      ...prev,
-                      gridCols: Number(e.target.value) as 2 | 3 | 4 | 6,
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  <option value={2}>2 Columns</option>
-                  <option value={3}>3 Columns</option>
-                  <option value={4}>4 Columns</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Font Size
-                </label>
-                <select
-                  value={pdfOptions.fontSize}
-                  onChange={(e) =>
-                    setPdfOptions((prev) => ({
-                      ...prev,
-                      fontSize: e.target.value as "small" | "medium" | "large",
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  <option value="small">Small</option>
-                  <option value="medium">Medium</option>
-                  <option value="large">Large</option>
-                </select>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center">
-              <input
-                type="checkbox"
-                id="includeFilenames"
-                checked={pdfOptions.includeFilenames}
-                onChange={(e) =>
-                  setPdfOptions((prev) => ({
-                    ...prev,
-                    includeFilenames: e.target.checked,
-                  }))
-                }
-                className="mr-2"
-              />
-              <label
-                htmlFor="includeFilenames"
-                className="text-sm text-gray-700"
-              >
-                Include filenames
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {photos.length === 0 && (
-        <div className="max-w-4xl mx-auto px-6 py-12">
-          <div className="bg-white rounded-lg shadow-sm p-8 mb-8">
-            <div className="text-center mb-6">
-              <Building2 className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Import from SimPRO
-              </h3>
-              <p className="text-gray-600">
-                Enter a job number to automatically import photo attachments
-              </p>
-            </div>
-
-            <div className="flex gap-4 max-w-md mx-auto">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Job Number"
-                  value={jobNumber}
-                  onChange={(e) => setJobNumber(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center font-medium"
-                  onKeyPress={(e) =>
-                    e.key === "Enter" && fetchSimproAttachments()
-                  }
-                />
-              </div>
-              <button
-                onClick={fetchSimproAttachments}
-                disabled={loading || !jobNumber.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Search className="w-5 h-5" />
-                {loading ? "Loading..." : "Import"}
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Or Upload Photos Manually
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Select multiple image files at once. Supports JPG, PNG, and
-                other formats.
-              </p>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
-                className="bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                {loading ? "Loading..." : "Choose Files"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {photos.length > 0 && (
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-semibold">{photos.length} Photos</span>
-                </div>
-                {currentJob && (
-                  <div className="text-sm text-gray-600">
-                    Job:{" "}
-                    <span className="font-medium">
-                      {currentJob.Name || jobNumber}
-                    </span>
-                  </div>
-                )}
-                <div className="text-sm text-gray-600">
-                  Total size:{" "}
-                  {formatFileSize(
-                    photos.reduce((acc, photo) => acc + photo.size, 0)
-                  )}
-                </div>
-                <div className="text-sm text-blue-600 font-medium">
-                  {getPageCount()} page{getPageCount() > 1 ? "s" : ""} •{" "}
-                  {pdfOptions.photosPerPage} photos per page
-                </div>
-              </div>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-              >
-                Add More Photos
-              </button>
-            </div>
-          </div>
-
-          <div ref={printRef} className="bg-white rounded-lg shadow-sm p-6">
-            <div
-              className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${pdfOptions.gridCols} gap-6`}
+        {/* File Upload */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4">Upload Photos</h3>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 mb-4">
+              Drop images here or click to browse
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg"
             >
+              Choose Files
+            </button>
+          </div>
+        </div>
+
+        {/* Photo Grid */}
+        {photos.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                Photos ({photos.length})
+              </h3>
+              <p className="text-sm text-gray-500">Click photo names to edit</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {photos.map((photo) => (
-                <div
-                  key={photo.id}
-                  className="bg-gray-50 rounded-lg overflow-hidden relative group"
-                >
-                  <button
-                    onClick={() => removePhoto(photo.id)}
-                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  <div className="aspect-square bg-white p-2">
+                <div key={photo.id} className="relative group">
+                  <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                     <img
                       src={photo.url}
                       alt={photo.name}
-                      className="w-full h-full object-cover rounded"
+                      className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="p-3">
-                    {editingPhotoId === photo.id ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") savePhotoName(photo.id);
-                            if (e.key === "Escape") cancelEditingName();
-                          }}
-                        />
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => savePhotoName(photo.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs transition-colors"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEditingName}
-                            className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <p
-                          className="text-sm font-medium text-gray-900 break-words leading-tight flex-1 cursor-pointer hover:text-blue-600 transition-colors"
-                          onClick={() => startEditingName(photo.id, photo.name)}
-                          title="Click to edit filename"
-                        >
-                          {removeExtension(photo.name)}
-                        </p>
-                        <Edit3
-                          className="w-3 h-3 text-gray-400 cursor-pointer hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100"
-                          onClick={() => startEditingName(photo.id, photo.name)}
-                        />
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between mt-2">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          photo.source === "simpro"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {photo.source === "simpro" ? "SimPRO" : "Uploaded"}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {formatFileSize(photo.size)}
-                      </span>
+                  <button
+                    onClick={() => removePhoto(photo.id)}
+                    className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
+                  {editingId === photo.id ? (
+                    <div className="bg-gray-100 rounded-lg px-3 py-2 mt-2">
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        className="w-full text-xs text-gray-700 text-center bg-transparent border-none outline-none"
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") saveEdit(photo.id);
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        onBlur={() => saveEdit(photo.id)}
+                        autoFocus
+                      />
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      className="bg-gray-100 rounded-lg px-3 py-2 mt-2 cursor-pointer hover:bg-gray-200 transition-colors"
+                      onClick={() => startEditing(photo.id, photo.name)}
+                    >
+                      <p className="text-xs text-gray-700 text-center truncate">
+                        {photo.name.replace(/\.[^/.]+$/, "")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
+        )}
+
+        {/* Empty State */}
+        {photos.length === 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              No Photos Yet
+            </h3>
+            <p className="text-gray-600">
+              Import photos from a SimPRO job or upload files to get started
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* PDF Editor Modal */}
+      {showPDFEditor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">PDF Editor</h2>
+              <button
+                onClick={() => setShowPDFEditor(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <PDFEditor
+                initialPhotos={photos.map((p) => ({
+                  url: p.url,
+                  name: p.name,
+                }))}
+                onClose={() => setShowPDFEditor(false)}
+                pdfEditor={pdfEditor}
+              />
+            </div>
+          </div>
         </div>
       )}
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*"
-        onChange={handleFileUpload}
-        className="hidden"
-      />
     </div>
   );
 };
