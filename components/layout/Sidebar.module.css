@@ -1,0 +1,127 @@
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  z-index: 1000;
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+.logoContainer {
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--header-height);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logoIcon {
+  width: 2rem;
+  height: 2rem;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-dark) 100%
+  );
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logoIcon span {
+  color: white;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.logoText {
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.collapseButton {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapseButton:hover {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.navigation {
+  flex: 1;
+  padding: 1rem;
+}
+
+.navigation ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.navLink:hover {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.navLink.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.navLink.active:hover {
+  background: var(--color-primary-dark);
+  color: white;
+}
+
+.collapsed .navLink {
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.collapsed .navLink span {
+  display: none;
+}

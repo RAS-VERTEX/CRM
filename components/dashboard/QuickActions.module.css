@@ -1,0 +1,121 @@
+.actionsCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  height: fit-content;
+}
+
+.cardTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 1.5rem;
+}
+
+.actionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.actionItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.actionItem:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.actionItem.blue {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.1);
+}
+
+.actionItem.blue:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.actionItem.green {
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.1);
+}
+
+.actionItem.green:hover {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.actionItem.purple {
+  background: rgba(139, 92, 246, 0.05);
+  border-color: rgba(139, 92, 246, 0.1);
+}
+
+.actionItem.purple:hover {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.actionItem.orange {
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.1);
+}
+
+.actionItem.orange:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.actionIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.blue .actionIcon {
+  background: var(--color-primary);
+  color: white;
+}
+
+.green .actionIcon {
+  background: var(--color-success);
+  color: white;
+}
+
+.purple .actionIcon {
+  background: #8b5cf6;
+  color: white;
+}
+
+.orange .actionIcon {
+  background: var(--color-warning);
+  color: white;
+}
+
+.actionContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.actionTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.actionDescription {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.3;
+}

@@ -1,0 +1,149 @@
+.reportSelector {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.categorySection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.categoryTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.reportsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.reportCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 2rem;
+  text-decoration: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.reportCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  transition: all 0.3s ease;
+}
+
+.reportCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.reportCard.blue::before {
+  background: var(--color-primary);
+}
+
+.reportCard.green::before {
+  background: var(--color-success);
+}
+
+.reportCard.purple::before {
+  background: #8b5cf6;
+}
+
+.reportCard.gray::before {
+  background: var(--color-secondary);
+}
+
+.reportIcon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.blue .reportIcon {
+  background: var(--color-primary);
+}
+
+.green .reportIcon {
+  background: var(--color-success);
+}
+
+.purple .reportIcon {
+  background: #8b5cf6;
+}
+
+.gray .reportIcon {
+  background: var(--color-secondary);
+}
+
+.reportContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reportTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.reportDescription {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.reportArrow {
+  color: var(--color-text-secondary);
+  transition: all 0.3s ease;
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
+.reportCard:hover .reportArrow {
+  color: var(--color-text-primary);
+  transform: translateX(4px);
+}
+
+@media (max-width: 768px) {
+  .reportsGrid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .reportCard {
+    padding: 1.5rem;
+  }
+
+  .reportIcon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .reportTitle {
+    font-size: 1.125rem;
+  }
+}
