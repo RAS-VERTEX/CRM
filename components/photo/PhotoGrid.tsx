@@ -1,9 +1,16 @@
-// components/photo/PhotoGrid.tsx - Updated styling
+// components/photo/PhotoGrid.tsx - Conditional Image usage
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { X, Building2 } from "lucide-react";
-import type { Photo } from "@/types";
+
+interface Photo {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+}
 
 interface PhotoGridProps {
   photos: Photo[];
@@ -18,42 +25,6 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-
-  const naturalSort = (a: string, b: string): number => {
-    const chunkify = (str: string) => {
-      return str.split(/(\d+)/).filter((chunk) => chunk !== "");
-    };
-
-    const chunksA = chunkify(a);
-    const chunksB = chunkify(b);
-
-    for (let i = 0; i < Math.max(chunksA.length, chunksB.length); i++) {
-      const chunkA = chunksA[i] || "";
-      const chunkB = chunksB[i] || "";
-
-      if (/^\d+$/.test(chunkA) && /^\d+$/.test(chunkB)) {
-        const numA = parseInt(chunkA, 10);
-        const numB = parseInt(chunkB, 10);
-        if (numA !== numB) {
-          return numA - numB;
-        }
-      } else {
-        const result = chunkA.localeCompare(chunkB);
-        if (result !== 0) {
-          return result;
-        }
-      }
-    }
-    return 0;
-  };
-
-  const sortedPhotos = React.useMemo(() => {
-    if (!Array.isArray(photos)) {
-      console.warn("PhotoGrid: photos prop is not an array:", photos);
-      return [];
-    }
-    return [...photos].sort((a, b) => naturalSort(a.name, b.name));
-  }, [photos]);
 
   const startEditing = (id: string, currentName: string) => {
     setEditingId(id);
@@ -79,6 +50,11 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({
     setEditingName("");
   };
 
+  // Helper function to check if URL is a data URL or blob URL
+  const isDataOrBlobUrl = (url: string) => {
+    return url.startsWith("data:") || url.startsWith("blob:");
+  };
+
   if (!Array.isArray(photos) || photos.length === 0) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
@@ -102,22 +78,38 @@ const PhotoGrid: React.FC<PhotoGridProps> = ({
         <p className="text-sm text-gray-600">Click photo names to edit</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {sortedPhotos.map((photo) => (
+        {photos.map((photo) => (
           <div key={photo.id} className="relative group">
-            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-              <img
-                src={photo.url}
-                alt={photo.name}
-                className="w-full h-full object-cover"
-              />
+            {/* Photo container - no border to match export */}
+            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
+              {isDataOrBlobUrl(photo.url) ? (
+                // Use regular img for data/blob URLs
+                <img
+                  src={photo.url}
+                  alt={photo.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                // Use Next.js Image for external URLs
+                <Image
+                  src={photo.url}
+                  alt={photo.name}
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className="object-cover"
+                />
+              )}
             </div>
+
+            {/* Remove button */}
             <button
               onClick={() => onPhotoRemove(photo.id)}
-              className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+              className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
             >
               <X className="w-4 h-4" />
             </button>
 
+            {/* Caption editing */}
             {editingId === photo.id ? (
               <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mt-2">
                 <input

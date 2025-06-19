@@ -1,9 +1,23 @@
-// components/photo/SimproImport.tsx - With real API implementation
+// components/photo/SimproImport.tsx - Fixed types
 "use client";
 
 import React, { useState } from "react";
 import { Search } from "lucide-react";
-import type { Photo } from "@/types";
+
+interface Photo {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+}
+
+interface SimproAttachment {
+  ID: string;
+  Filename: string;
+  MimeType: string;
+  FileSizeBytes: number;
+  Base64Data?: string;
+}
 
 interface SimproImportProps {
   jobNumber: string;
@@ -46,12 +60,14 @@ const SimproImport: React.FC<SimproImportProps> = ({
         return;
       }
 
-      const simproPhotos: Photo[] = attachments.map((att: any) => ({
-        id: `simpro_${att.ID}`,
-        name: att.Filename,
-        url: `data:${att.MimeType};base64,${att.Base64Data}`,
-        size: att.FileSizeBytes || 0,
-      }));
+      const simproPhotos: Photo[] = attachments.map(
+        (att: SimproAttachment) => ({
+          id: `simpro_${att.ID}`,
+          name: att.Filename,
+          url: `data:${att.MimeType};base64,${att.Base64Data}`,
+          size: att.FileSizeBytes || 0,
+        })
+      );
 
       onPhotosImported(simproPhotos);
       onError(`Loaded ${simproPhotos.length} photos from SimPRO`);

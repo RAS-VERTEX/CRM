@@ -1,8 +1,15 @@
+// components/photo/FileUpload.tsx - Fixed import path
 "use client";
 
 import React, { useRef } from "react";
 import { Upload } from "lucide-react";
-import type { Photo } from "@/types";
+
+interface Photo {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+}
 
 interface FileUploadProps {
   onPhotosUploaded: (photos: Photo[]) => void;

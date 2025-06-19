@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       message: "Authentication successful",
     });
   } catch (error) {
-    logger.error("SimPRO authentication test failed", error);
+    logger.error("SimPRO authentication test failed", error as Error);
 
     return NextResponse.json(
       {

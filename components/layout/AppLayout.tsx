@@ -18,7 +18,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, actions }) => {
             {/* Logo section */}
             <div className="flex items-center">
               <div className="flex items-center space-x-3">
-                {/* RAS-VERTEX Logo placeholder - replace with actual logo */}
                 <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
                   <span className="text-white font-bold text-lg">RV</span>
                 </div>

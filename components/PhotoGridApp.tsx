@@ -1,13 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import AppLayout from "@/app/layout";
+import AppLayout from "@/components/layout/AppLayout";
 import ErrorMessage from "@/components/ui/ErrorMessage";
 import HeaderActions from "@/components/ui/HeaderActions";
 import SimproImport from "@/components/photo/SimproImport";
 import FileUpload from "@/components/photo/FileUpload";
 import PhotoGrid from "@/components/photo/PhotoGrid";
-import type { Photo } from "@/types";
+
+interface Photo {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+}
 
 const PhotoGridApp: React.FC = () => {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -67,7 +73,54 @@ const PhotoGridApp: React.FC = () => {
     );
   };
 
-  const generatePrint = () => {
+  // Fixed generatePrint function with base64 conversion
+  const generatePrint = async () => {
+    // Convert all photos to base64 data URLs for print compatibility
+    const photosWithBase64 = await Promise.all(
+      sortedPhotos.map(async (photo) => {
+        try {
+          // Create a canvas to convert blob URLs to base64
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          const img = new Image();
+
+          return new Promise<{
+            id: string;
+            name: string;
+            url: string;
+            size: number;
+          }>((resolve) => {
+            img.onload = () => {
+              // Set canvas size to image size
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+
+              // Draw image to canvas
+              ctx?.drawImage(img, 0, 0);
+
+              // Convert to base64
+              const base64Url = canvas.toDataURL("image/jpeg", 0.9);
+
+              resolve({
+                ...photo,
+                url: base64Url,
+              });
+            };
+
+            img.onerror = () => {
+              // If image fails to load, use original URL
+              resolve(photo);
+            };
+
+            img.src = photo.url;
+          });
+        } catch (error) {
+          console.error("Error converting image:", error);
+          return photo;
+        }
+      })
+    );
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
@@ -82,59 +135,71 @@ const PhotoGridApp: React.FC = () => {
               size: A4;
               margin-top: 0;
               margin-bottom: 0;
-              @top-left { content: none; }
-              @top-center { content: none; }
-              @top-right { content: none; }
-              @bottom-left { content: none; }
-              @bottom-center { content: none; }
-              @bottom-right { content: none; }
             }
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700&display=swap');
-            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            * { 
+              margin: 0; 
+              padding: 0; 
+              box-sizing: border-box; 
+            }
+            
             body { 
               font-family: 'Poppins', Arial, sans-serif;
               font-weight: 200;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
               color-adjust: exact !important;
+              background: white;
             }
+            
             .grid { 
               display: grid; 
               grid-template-columns: repeat(4, 1fr); 
               gap: 1rem; 
               padding: 1rem;
             }
+            
             .photo-item { 
               position: relative;
+              break-inside: avoid;
             }
+            
             .photo-container { 
               aspect-ratio: 1;
-              background: #f3f4f6 !important;
+              background: #f3f4f6;
               border-radius: 0.5rem;
               overflow: hidden;
+              position: relative;
             }
+            
             .photo-container img { 
               width: 100%; 
               height: 100%; 
-              object-fit: cover; 
+              object-fit: cover;
+              display: block;
             }
+            
             .caption { 
-              background: #f3f4f6 !important;
+              background: #f3f4f6;
               border-radius: 0.5rem;
               padding: 0.5rem 0.75rem;
               margin-top: 0.5rem;
               text-align: center;
               font-size: 0.75rem;
-              font-weight: 200;
-              color: #374151 !important;
+              font-weight: 400;
+              color: #374151;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
+            
             @media print {
               .grid { 
                 grid-template-columns: repeat(3, 1fr); 
                 gap: 0.75rem; 
+                padding: 0.5rem;
               }
+              
               .caption {
                 font-size: 0.7rem;
                 padding: 0.4rem 0.6rem;
@@ -142,17 +207,23 @@ const PhotoGridApp: React.FC = () => {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
+              
               .photo-container {
                 background: #f3f4f6 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+              }
+              
+              .photo-item {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           </style>
         </head>
         <body>
           <div class="grid">
-            ${sortedPhotos
+            ${photosWithBase64
               .map(
                 (photo) => `
               <div class="photo-item">
@@ -174,11 +245,14 @@ const PhotoGridApp: React.FC = () => {
 
     printWindow.document.write(printContent);
     printWindow.document.close();
-    printWindow.print();
+
+    // Wait a moment for images to load before printing
+    setTimeout(() => {
+      printWindow.print();
+    }, 1000);
   };
 
   const handlePDFEditor = () => {
-    // Add PDF Editor functionality here when needed
     console.log("PDF Editor clicked - implement when ready");
   };
 
@@ -193,7 +267,7 @@ const PhotoGridApp: React.FC = () => {
       hasPhotos={photos.length > 0}
       hasJobNumber={jobNumber.trim().length > 0}
       onQuickPrint={generatePrint}
-      onPDFEditor={handlePDFEditor} // ADD THIS
+      onPDFEditor={handlePDFEditor}
       onClearAll={clearAll}
     />
   );
@@ -212,7 +286,7 @@ const PhotoGridApp: React.FC = () => {
       <FileUpload onPhotosUploaded={handlePhotosUploaded} />
 
       <PhotoGrid
-        photos={sortedPhotos} // USE SORTED PHOTOS HERE
+        photos={sortedPhotos}
         onPhotoRemove={handlePhotoRemove}
         onPhotoRename={handlePhotoRename}
       />

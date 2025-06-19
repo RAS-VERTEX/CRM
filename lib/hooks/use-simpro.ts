@@ -1,5 +1,22 @@
+// lib/hooks/use-simpro.ts - Fixed types
 import { useState, useCallback } from "react";
-import { PhotoGridItem } from "../simpro/types";
+
+interface PhotoGridItem {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  source: "upload" | "simpro";
+  simproData?: SimproAttachment;
+}
+
+interface SimproAttachment {
+  ID: string;
+  Filename: string;
+  MimeType: string;
+  FileSizeBytes: number;
+  Base64Data?: string;
+}
 
 interface UseSimPROReturn {
   loading: boolean;
@@ -37,11 +54,11 @@ export const useSimPRO = (): UseSimPROReturn => {
 
         const { attachments } = await response.json();
 
-        const imageAttachments = attachments.filter((att: any) =>
+        const imageAttachments = attachments.filter((att: SimproAttachment) =>
           att.MimeType?.startsWith("image/")
         );
 
-        return imageAttachments.map((att: any) => ({
+        return imageAttachments.map((att: SimproAttachment) => ({
           id: `simpro_${att.ID}`,
           name: att.Filename,
           url: `data:${att.MimeType};base64,${att.Base64Data}`,

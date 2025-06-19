@@ -1,14 +1,8 @@
-// app/api/simpro/jobs/[jobId]/attachments/route.ts
+// app/api/simpro/jobs/[jobId]/attachments/route.ts - Simplified and properly typed
 import { NextRequest, NextResponse } from "next/server";
 
 const SIMPRO_BASE_URL = process.env.NEXT_PUBLIC_SIMPRO_BASE_URL;
 const SIMPRO_ACCESS_TOKEN = process.env.SIMPRO_ACCESS_TOKEN;
-
-interface RouteContext {
-  params: {
-    jobId: string;
-  };
-}
 
 // Types based on SimPRO API documentation
 interface SimproAttachmentList {
@@ -66,8 +60,11 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   return data;
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  const { jobId } = params;
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  const { jobId } = await params;
   const { searchParams } = new URL(request.url);
   const companyId = parseInt(searchParams.get("companyId") || "0");
 
@@ -116,8 +113,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json(
       {
         success: false,
-        error: `Job ID must be a valid positive number, got: "${jobId}"`,
-        code: "INVALID_JOB_ID",
+        error: `Job ID must be a valid positive number. Received: "${jobId}"`,
+        code: "INVALID_JOB_ID_FORMAT",
       },
       { status: 400 }
     );
@@ -126,8 +123,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     console.log(`Fetching attachments for job ${parsedJobId}...`);
 
-    // Step 1: List all attachments for the job
-    // API: GET /api/v1.0/companies/{companyID}/jobs/{jobID}/attachments/files/
+    // Step 1: Get list of all attachments for the job
     const listAttachmentsUrl = `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}/attachments/files/?pageSize=250`;
 
     console.log(`Fetching attachment list from: ${listAttachmentsUrl}`);
@@ -138,235 +134,101 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     console.log(`Found ${attachmentsList.length} total attachments`);
 
     if (attachmentsList.length === 0) {
+      console.log(`No attachments found for job ${parsedJobId}`);
       return NextResponse.json({
         success: true,
         attachments: [],
-        job: null,
-        metadata: {
-          totalAttachments: 0,
-          imageAttachments: 0,
-          jobId: parsedJobId,
-          companyId,
-          timestamp: new Date().toISOString(),
-          message: `No attachments found for job ${parsedJobId}`,
-        },
+        message: `No attachments found for job ${parsedJobId}`,
       });
     }
 
     // Step 2: Get detailed info for each attachment with Base64 data
-    console.log(
-      `Getting detailed info for ${attachmentsList.length} attachments...`
-    );
+    console.log("Fetching detailed attachment info...");
+    const detailedAttachments: SimproAttachmentDetail[] = [];
 
-    const attachmentDetails = await Promise.all(
-      attachmentsList.map(async (attachment, index) => {
-        try {
+    for (const attachment of attachmentsList) {
+      try {
+        console.log(`Getting details for attachment: ${attachment.Filename}`);
+
+        const detailUrl = `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}/attachments/files/${attachment.ID}?display=Base64`;
+        const detailedAttachment = await apiRequest<SimproAttachmentDetail>(
+          detailUrl
+        );
+
+        // Only include image attachments
+        if (
+          detailedAttachment.MimeType &&
+          detailedAttachment.MimeType.startsWith("image/")
+        ) {
+          console.log(`✓ Added image: ${detailedAttachment.Filename}`);
+          detailedAttachments.push(detailedAttachment);
+        } else {
           console.log(
-            `Getting details for attachment ${index + 1}/${
-              attachmentsList.length
-            }: ${attachment.ID} (${attachment.Filename})`
+            `✗ Skipped non-image: ${detailedAttachment.Filename} (${detailedAttachment.MimeType})`
           );
-
-          // API: GET /api/v1.0/companies/{companyID}/jobs/{jobID}/attachments/files/{fileID}?display=Base64
-          const detailUrl = `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}/attachments/files/${attachment.ID}?display=Base64`;
-
-          const detail = await apiRequest<SimproAttachmentDetail>(detailUrl);
-
-          console.log(
-            `✓ Got details for ${attachment.Filename} - MimeType: ${
-              detail.MimeType
-            }, HasBase64: ${!!detail.Base64Data}`
-          );
-
-          return detail;
-        } catch (error) {
-          console.error(
-            `Failed to get details for attachment ${attachment.ID} (${attachment.Filename}):`,
-            error
-          );
-          // Return basic info if detailed fetch fails
-          return {
-            ID: attachment.ID,
-            Filename: attachment.Filename,
-            MimeType: "unknown",
-            FileSizeBytes: 0,
-          } as SimproAttachmentDetail;
         }
-      })
-    );
-
-    // Step 2.5: Try to get job details and site address while we're here (ENHANCED VERSION)
-    let jobDetails = null;
-    let siteAddress = null;
-
-    try {
-      console.log(`Attempting to fetch job details for job ${parsedJobId}...`);
-
-      // Try different job endpoint patterns - using the correct SimPRO API format
-      const jobEndpoints = [
-        `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}`, // No trailing slash
-        `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}/`,
-      ];
-
-      for (const endpoint of jobEndpoints) {
-        try {
-          console.log(`Trying job endpoint: ${endpoint}`);
-          jobDetails = await apiRequest(endpoint);
-          console.log(`✅ Got job details from: ${endpoint}`);
-          console.log(`Job Name: ${jobDetails.Name}`);
-          console.log(
-            `Site ID: ${jobDetails.Site?.ID}, Site Name: ${jobDetails.Site?.Name}`
-          );
-          break;
-        } catch (error) {
-          console.log(`❌ Job endpoint failed: ${endpoint} - ${error.message}`);
-          continue;
-        }
+      } catch (error) {
+        console.warn(
+          `Failed to get details for attachment ${attachment.ID}:`,
+          error as Error
+        );
+        // Continue with other attachments
       }
-
-      // If we got job details, try to get the actual site address
-      if (jobDetails && jobDetails.Site?.ID) {
-        try {
-          console.log(
-            `Fetching site details for Site ID: ${jobDetails.Site.ID}...`
-          );
-
-          const siteEndpoints = [
-            `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/sites/${jobDetails.Site.ID}`,
-            `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/sites/${jobDetails.Site.ID}/`,
-          ];
-
-          for (const siteEndpoint of siteEndpoints) {
-            try {
-              console.log(`Trying site endpoint: ${siteEndpoint}`);
-              const siteDetails = await apiRequest(siteEndpoint);
-              console.log(`✅ Got site details from: ${siteEndpoint}`);
-
-              // Build full address from site details
-              const addressParts = [
-                siteDetails.Address?.Address,
-                siteDetails.Address?.City,
-                siteDetails.Address?.State,
-                siteDetails.Address?.PostalCode,
-              ].filter((part) => part && part.trim() !== "");
-
-              if (addressParts.length > 0) {
-                siteAddress = addressParts.join(", ");
-                console.log(`✅ Built site address: "${siteAddress}"`);
-              } else {
-                // Fallback to site name if no address components
-                siteAddress = siteDetails.Name || jobDetails.Site.Name;
-                console.log(`📍 Using site name as address: "${siteAddress}"`);
-              }
-
-              // Add site details to job object
-              jobDetails.Site = {
-                ...jobDetails.Site,
-                ...siteDetails,
-                Address: siteAddress,
-              };
-              break;
-            } catch (error) {
-              console.log(
-                `❌ Site endpoint failed: ${siteEndpoint} - ${error.message}`
-              );
-              continue;
-            }
-          }
-        } catch (error) {
-          console.log(`❌ Could not fetch site details: ${error.message}`);
-          // Fallback to site name
-          siteAddress = jobDetails.Site.Name;
-          console.log(`📍 Fallback to site name: "${siteAddress}"`);
-        }
-      }
-
-      if (jobDetails) {
-        console.log(`Final job details summary:`);
-        console.log(`  Job Name: ${jobDetails.Name}`);
-        console.log(`  Site Name: ${jobDetails.Site?.Name}`);
-        console.log(`  Site Address: ${siteAddress || "Not found"}`);
-      }
-    } catch (error) {
-      console.log(`Could not fetch job/site details: ${error.message}`);
-      // Don't fail the whole request if job details fail
-    }
-
-    // Step 3: Filter for images only
-    const imageAttachments = attachmentDetails.filter((att) => {
-      const isImage = att.MimeType?.startsWith("image/");
-      console.log(
-        `${att.Filename}: MimeType=${att.MimeType}, IsImage=${isImage}`
-      );
-      return isImage;
-    });
-
-    console.log(
-      `Found ${imageAttachments.length} image attachments out of ${attachmentDetails.length} total`
-    );
-
-    if (imageAttachments.length === 0) {
-      return NextResponse.json({
-        success: true,
-        attachments: [],
-        job: jobDetails, // CHANGED: Include job details in response
-        metadata: {
-          totalAttachments: attachmentsList.length,
-          imageAttachments: 0,
-          jobId: parsedJobId,
-          companyId,
-          timestamp: new Date().toISOString(),
-          message: `No image attachments found for job ${parsedJobId}. Found ${attachmentsList.length} total attachments but none were images.`,
-          allAttachments: attachmentDetails.map((att) => ({
-            filename: att.Filename,
-            mimeType: att.MimeType,
-          })),
-        },
-      });
     }
 
     console.log(
-      `Successfully processed ${imageAttachments.length} image attachments for job ${parsedJobId}`
+      `Returning ${detailedAttachments.length} image attachments for job ${parsedJobId}`
     );
 
     return NextResponse.json({
       success: true,
-      attachments: imageAttachments,
-      job: jobDetails, // CHANGED: Include job details in response
-      metadata: {
-        totalAttachments: attachmentsList.length,
-        imageAttachments: imageAttachments.length,
-        jobId: parsedJobId,
-        companyId,
-        timestamp: new Date().toISOString(),
-      },
+      attachments: detailedAttachments,
+      total: detailedAttachments.length,
+      jobId: parsedJobId,
     });
   } catch (error) {
-    console.error(`ERROR fetching attachments for job ${jobId}:`, error);
+    console.error(
+      `Error fetching attachments for job ${jobId}:`,
+      error as Error
+    );
 
     const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
+      error instanceof Error ? error.message : "Unknown error";
 
-    const statusCode =
-      errorMessage.includes("Authentication") || errorMessage.includes("401")
-        ? 401
-        : errorMessage.includes("not found") || errorMessage.includes("404")
-        ? 404
-        : 500;
+    // Check for specific SimPRO errors
+    if (errorMessage.includes("404")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Job ${parsedJobId} not found in SimPRO`,
+          code: "JOB_NOT_FOUND",
+          details: errorMessage,
+        },
+        { status: 404 }
+      );
+    }
+
+    if (errorMessage.includes("401") || errorMessage.includes("403")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication failed with SimPRO API",
+          code: "AUTHENTICATION_FAILED",
+          details: errorMessage,
+        },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       {
         success: false,
-        error: errorMessage,
-        jobId: jobId,
-        code:
-          statusCode === 401
-            ? "AUTHENTICATION_FAILED"
-            : statusCode === 404
-            ? "JOB_NOT_FOUND"
-            : "INTERNAL_ERROR",
+        error: "Failed to fetch job attachments",
+        code: "FETCH_FAILED",
+        details: errorMessage,
+        jobId: parsedJobId,
       },
-      { status: statusCode }
+      { status: 500 }
     );
   }
 }
