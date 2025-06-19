@@ -195,6 +195,103 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       })
     );
 
+    // Step 2.5: Try to get job details and site address while we're here (ENHANCED VERSION)
+    let jobDetails = null;
+    let siteAddress = null;
+
+    try {
+      console.log(`Attempting to fetch job details for job ${parsedJobId}...`);
+
+      // Try different job endpoint patterns - using the correct SimPRO API format
+      const jobEndpoints = [
+        `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}`, // No trailing slash
+        `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/jobs/${parsedJobId}/`,
+      ];
+
+      for (const endpoint of jobEndpoints) {
+        try {
+          console.log(`Trying job endpoint: ${endpoint}`);
+          jobDetails = await apiRequest(endpoint);
+          console.log(`✅ Got job details from: ${endpoint}`);
+          console.log(`Job Name: ${jobDetails.Name}`);
+          console.log(
+            `Site ID: ${jobDetails.Site?.ID}, Site Name: ${jobDetails.Site?.Name}`
+          );
+          break;
+        } catch (error) {
+          console.log(`❌ Job endpoint failed: ${endpoint} - ${error.message}`);
+          continue;
+        }
+      }
+
+      // If we got job details, try to get the actual site address
+      if (jobDetails && jobDetails.Site?.ID) {
+        try {
+          console.log(
+            `Fetching site details for Site ID: ${jobDetails.Site.ID}...`
+          );
+
+          const siteEndpoints = [
+            `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/sites/${jobDetails.Site.ID}`,
+            `${SIMPRO_BASE_URL}/api/v1.0/companies/${companyId}/sites/${jobDetails.Site.ID}/`,
+          ];
+
+          for (const siteEndpoint of siteEndpoints) {
+            try {
+              console.log(`Trying site endpoint: ${siteEndpoint}`);
+              const siteDetails = await apiRequest(siteEndpoint);
+              console.log(`✅ Got site details from: ${siteEndpoint}`);
+
+              // Build full address from site details
+              const addressParts = [
+                siteDetails.Address?.Address,
+                siteDetails.Address?.City,
+                siteDetails.Address?.State,
+                siteDetails.Address?.PostalCode,
+              ].filter((part) => part && part.trim() !== "");
+
+              if (addressParts.length > 0) {
+                siteAddress = addressParts.join(", ");
+                console.log(`✅ Built site address: "${siteAddress}"`);
+              } else {
+                // Fallback to site name if no address components
+                siteAddress = siteDetails.Name || jobDetails.Site.Name;
+                console.log(`📍 Using site name as address: "${siteAddress}"`);
+              }
+
+              // Add site details to job object
+              jobDetails.Site = {
+                ...jobDetails.Site,
+                ...siteDetails,
+                Address: siteAddress,
+              };
+              break;
+            } catch (error) {
+              console.log(
+                `❌ Site endpoint failed: ${siteEndpoint} - ${error.message}`
+              );
+              continue;
+            }
+          }
+        } catch (error) {
+          console.log(`❌ Could not fetch site details: ${error.message}`);
+          // Fallback to site name
+          siteAddress = jobDetails.Site.Name;
+          console.log(`📍 Fallback to site name: "${siteAddress}"`);
+        }
+      }
+
+      if (jobDetails) {
+        console.log(`Final job details summary:`);
+        console.log(`  Job Name: ${jobDetails.Name}`);
+        console.log(`  Site Name: ${jobDetails.Site?.Name}`);
+        console.log(`  Site Address: ${siteAddress || "Not found"}`);
+      }
+    } catch (error) {
+      console.log(`Could not fetch job/site details: ${error.message}`);
+      // Don't fail the whole request if job details fail
+    }
+
     // Step 3: Filter for images only
     const imageAttachments = attachmentDetails.filter((att) => {
       const isImage = att.MimeType?.startsWith("image/");
@@ -212,7 +309,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({
         success: true,
         attachments: [],
-        job: null,
+        job: jobDetails, // CHANGED: Include job details in response
         metadata: {
           totalAttachments: attachmentsList.length,
           imageAttachments: 0,
@@ -235,7 +332,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       success: true,
       attachments: imageAttachments,
-      job: null,
+      job: jobDetails, // CHANGED: Include job details in response
       metadata: {
         totalAttachments: attachmentsList.length,
         imageAttachments: imageAttachments.length,
