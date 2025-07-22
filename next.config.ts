@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Remove this line: serverExternalPackages: ["html2pdf.js"],
-
   images: {
     domains: ["ropeaccessservices.simprocloud.com"],
     dangerouslyAllowSVG: true,
@@ -29,15 +27,16 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  async redirects() {
-    return [
-      {
-        source: "/",
-        destination: "/photo-grid",
-        permanent: true,
-      },
-    ];
-  },
+  // Remove this entire redirects() function - it's broken!
+  // async redirects() {
+  //   return [
+  //     {
+  //       source: "/",
+  //       destination: "/",
+  //       permanent: true,
+  //     },
+  //   ];
+  // },
 };
 
 export default nextConfig;
